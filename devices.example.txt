@@ -1,0 +1,5 @@
+# Devices to switch between:  <part of device name>=headphones or speakers
+# Copy this file to devices.txt, or just use the tray menu: Add device.
+# Without devices.txt SoundFlip cycles through all active output devices.
+Headset=headphones
+Realtek=speakers
