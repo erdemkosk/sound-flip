@@ -14,6 +14,10 @@ SoundFlip sits in the system tray and flips the default output device when you p
 - **Languages:** Türkçe / English
 - **No dependencies:** a single small exe, nothing to install
 
+## Download
+
+Grab `SoundFlip.exe` from the [latest release](https://github.com/erdemkosk/sound-flip/releases/latest). Every push to `main` builds a new one automatically.
+
 ## Build
 
 Windows ships with a C# compiler, so no Visual Studio is needed:

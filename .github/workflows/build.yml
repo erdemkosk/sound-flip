@@ -1,0 +1,43 @@
+name: Build
+
+# main'e her push'ta exe derlenir ve indirilebilir bir Release olarak yayinlanir
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build SoundFlip.exe
+        shell: cmd
+        run: build.bat
+
+      - name: Verify exe
+        shell: pwsh
+        run: if (-not (Test-Path SoundFlip.exe)) { Write-Error "SoundFlip.exe was not built"; exit 1 }
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoundFlip
+          path: |
+            SoundFlip.exe
+            devices.example.txt
+
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: |
+          $n = "${{ github.run_number }}"
+          $tag = if ("${{ github.run_attempt }}" -eq "1") { "build-$n" } else { "build-$n-${{ github.run_attempt }}" }
+          $short = "${{ github.sha }}".Substring(0, 7)
+          gh release create $tag SoundFlip.exe devices.example.txt `
+            --target "${{ github.sha }}" `
+            --title "SoundFlip build $n ($short)" `
+            --generate-notes `
+            --latest
