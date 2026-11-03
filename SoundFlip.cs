@@ -303,9 +303,13 @@ namespace SoundFlip {
     }
 
     public void ShowDevice(Device d) {
-      headphone = d.Headphone;
-      title = d.Headphone ? L.T("Kulaklık", "Headphones") : L.T("Hoparlör", "Speakers");
-      sub = d.Short;
+      ShowMessage(d.Headphone ? L.T("Kulaklık", "Headphones") : L.T("Hoparlör", "Speakers"), d.Short, d.Headphone);
+    }
+
+    public void ShowMessage(string title, string sub, bool headphone) {
+      this.headphone = headphone;
+      this.title = title;
+      this.sub = sub;
       var wa = Screen.PrimaryScreen.WorkingArea;
       Location = new Point(wa.Left + (wa.Width - Width) / 2, wa.Bottom - Height - (int)(28 * Theme.Scale));
       if (!Visible) { Opacity = 0; Show(); }
@@ -522,9 +526,22 @@ namespace SoundFlip {
       hotkey.Pressed += Toggle;
       poll.Tick += (s, e) => RefreshTray();
       poll.Start();
+      // Oturum acilisinda ses servisi henuz hazir olmayabilir; ikon yine de gorunsun,
+      // dogru cihaz ikonu poll ile gelir
+      tray.Icon = Theme.TrayIcon(false);
+      tray.Text = L.AppName;
       RefreshTray();
       tray.Visible = true;
       if (!hotkey.Register(hotkeyCombo)) WarnHotkeyTaken(hotkeyCombo);
+      else osd.ShowMessage(L.AppName, L.T("Hazır  ·  ", "Ready  ·  ") + Settings.Text(hotkeyCombo), CurrentIsHeadphone());
+    }
+
+    bool CurrentIsHeadphone() {
+      try {
+        string cur = Audio.DefaultId();
+        Device d = Audio.Devices().Find(x => x.Id == cur);
+        return d != null && d.Headphone;
+      } catch { return false; }
     }
 
     void WarnHotkeyTaken(Keys k) {
@@ -570,10 +587,13 @@ namespace SoundFlip {
     // Varsayilan cihaz Windows'tan elle degistirilirse ikon da guncellensin
     void RefreshTray() {
       string cur;
-      try { cur = Audio.DefaultId() ?? ""; } catch { return; }
-      if (cur == shownId) return;
+      Device d;
+      try {
+        cur = Audio.DefaultId() ?? "";
+        if (cur == shownId) return;
+        d = Audio.Devices().Find(x => x.Id == cur);
+      } catch { return; } // ses servisi hazir degil; bir sonraki poll'da tekrar dener
       shownId = cur;
-      Device d = Audio.Devices().Find(x => x.Id == cur);
       var old = tray.Icon;
       tray.Icon = Theme.TrayIcon(d != null && d.Headphone);
       if (old != null) old.Dispose();
