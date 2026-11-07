@@ -1,6 +1,6 @@
 // SoundFlip - kulaklik <-> hoparlor arasinda tek tusla gecis.
 // Gorev cubugu ikonu: sol tik = gecis, sag tik = menu. Kisayol: Ctrl+Alt+S (degistirilebilir).
-// Cihazlar ayni klasordeki devices.txt'den okunur:  <ad parcasi>=headphones|speakers
+// Cihazlar %LOCALAPPDATA%\SoundFlip\devices.txt'den okunur:  <ad parcasi>=headphones|speakers
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -19,6 +19,24 @@ namespace SoundFlip {
     public const string AppName = "SoundFlip";
     public static bool English;
     public static string T(string tr, string en) { return English ? en : tr; }
+  }
+
+  // Ayar dosyalari exe'den bagimsiz, kullanicinin kendi klasorunde durur
+  static class Storage {
+    static readonly string Dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), L.AppName);
+
+    public static string FilePath(string name) { return Path.Combine(Dir, name); }
+
+    // Eski surumler dosyalari exe'nin yaninda tutuyordu; varsa buraya tasinir
+    public static void Init() {
+      Directory.CreateDirectory(Dir);
+      foreach (var name in new[] { "devices.txt", "settings.txt" }) {
+        string old = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, name);
+        try {
+          if (File.Exists(old) && !File.Exists(FilePath(name))) File.Move(old, FilePath(name));
+        } catch (IOException) { } catch (UnauthorizedAccessException) { }
+      }
+    }
   }
 
   // ---- Windows Core Audio COM arayuzleri ----
@@ -91,7 +109,25 @@ namespace SoundFlip {
 
     static readonly string[] HeadphoneWords = { "kulakl", "headphone", "headset", "earphone", "buds" };
 
-    static string ConfigPath { get { return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "devices.txt"); } }
+    public static string ConfigPath { get { return Storage.FilePath("devices.txt"); } }
+
+    // Ilk calismada mevcut cihazlarla doldurulur ki kullanici istemedigini silebilsin.
+    // Tam ad yazilir: ayni ada sahip iki cikis (Speakers/Headphones (Realtek)) ayri satir olsun
+    public static void EnsureConfig() {
+      if (File.Exists(ConfigPath)) return;
+      var all = AllDevices();
+      if (all.Count == 0) return; // ses servisi yeni aciliyor; sonraki poll'da tekrar dener
+      var lines = new List<string> {
+        L.T("# SoundFlip cihaz listesi: kısayol bu cihazlar arasında, bu sırayla geçiş yapar.",
+            "# SoundFlip device list: the shortcut cycles through these devices, in this order."),
+        L.T("# İstemediğin cihazın satırını sil ve kaydet, hemen geçerli olur.",
+            "# Delete the line of a device you don't want and save; it takes effect right away."),
+        L.T("# Biçim:  cihaz adı=headphones  veya  cihaz adı=speakers",
+            "# Format:  device name=headphones  or  device name=speakers")
+      };
+      foreach (var d in all) lines.Add(d.Name + "=" + (d.Headphone ? "headphones" : "speakers"));
+      File.WriteAllLines(ConfigPath, lines.ToArray());
+    }
 
     // Aktif cikis cihazlari; cihazlar.txt varsa sadece oradakiler, o sirayla
     public static List<Device> Devices() {
@@ -120,7 +156,7 @@ namespace SoundFlip {
 
     public static void AddToList(Device d, bool headphone) {
       var lines = new List<string>(File.Exists(ConfigPath) ? File.ReadAllLines(ConfigPath) : new string[0]);
-      lines.Add(d.Short + "=" + (headphone ? "headphones" : "speakers"));
+      lines.Add(d.Name + "=" + (headphone ? "headphones" : "speakers"));
       File.WriteAllLines(ConfigPath, lines.ToArray());
     }
 
@@ -398,7 +434,7 @@ namespace SoundFlip {
 
   // Ayarlar settings.txt'de saklanir:  hotkey=Ctrl+Alt+S  /  language=tr
   static class Settings {
-    static readonly string Path_ = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.txt");
+    static readonly string Path_ = Storage.FilePath("settings.txt");
     static readonly KeysConverter Converter = new KeysConverter();
     public static readonly Keys DefaultHotkey = Keys.Control | Keys.Alt | Keys.S;
 
@@ -514,6 +550,7 @@ namespace SoundFlip {
     readonly HotkeyWindow hotkey = new HotkeyWindow();
     readonly System.Windows.Forms.Timer poll = new System.Windows.Forms.Timer { Interval = 2000 };
     string shownId = "";
+    DateTime shownConfigTime;
     Keys hotkeyCombo = Settings.LoadHotkey();
 
     public TrayApp() {
@@ -584,16 +621,20 @@ namespace SoundFlip {
       osd.ShowDevice(d);
     }
 
-    // Varsayilan cihaz Windows'tan elle degistirilirse ikon da guncellensin
+    // Varsayilan cihaz Windows'tan elle degistirilirse ya da devices.txt duzenlenirse ikon da guncellensin
     void RefreshTray() {
       string cur;
       Device d;
+      DateTime configTime;
       try {
+        Audio.EnsureConfig();
         cur = Audio.DefaultId() ?? "";
-        if (cur == shownId) return;
+        configTime = File.GetLastWriteTimeUtc(Audio.ConfigPath);
+        if (cur == shownId && configTime == shownConfigTime) return;
         d = Audio.Devices().Find(x => x.Id == cur);
       } catch { return; } // ses servisi hazir degil; bir sonraki poll'da tekrar dener
       shownId = cur;
+      shownConfigTime = configTime;
       var old = tray.Icon;
       tray.Icon = Theme.TrayIcon(d != null && d.Headphone);
       if (old != null) old.Dispose();
@@ -648,8 +689,7 @@ namespace SoundFlip {
       change.Click += (s, e) => ChangeHotkey();
       menu.Items.Add(change);
       var edit = new ToolStripMenuItem(L.T("Cihaz listesini düzenle…", "Edit device list…"));
-      edit.Click += (s, e) => System.Diagnostics.Process.Start("notepad.exe",
-        "\"" + Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "devices.txt") + "\"");
+      edit.Click += (s, e) => System.Diagnostics.Process.Start("notepad.exe", "\"" + Audio.ConfigPath + "\"");
       menu.Items.Add(edit);
       var lang = new ToolStripMenuItem(L.T("Dil", "Language"));
       var tr = new ToolStripMenuItem("Türkçe") { Checked = !L.English };
@@ -707,6 +747,7 @@ namespace SoundFlip {
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
         Theme.Init();
+        Storage.Init();
         L.English = Settings.LoadEnglish();
         Application.Run(new TrayApp());
       }

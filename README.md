@@ -31,10 +31,11 @@ This produces `SoundFlip.exe` next to the source.
 ## Usage
 
 1. Run `SoundFlip.exe`; an icon appears near the clock.
-2. Right-click → **Add device** → pick your headset → **As headphones**, then your speakers → **As speakers**.
-3. Press `Ctrl+Alt+S` to flip.
+2. Press `Ctrl+Alt+S` to flip.
 
-Settings are stored next to the exe:
+On first run SoundFlip writes every active output device to `devices.txt`. To drop one, right-click → **Edit device list**, delete its line and save, or use **Remove device**.
+
+Settings are stored in `%LOCALAPPDATA%\SoundFlip`, independent of where the exe lives:
 
 | File | Contents |
 | --- | --- |
