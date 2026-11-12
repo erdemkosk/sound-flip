@@ -569,6 +569,8 @@ namespace SoundFlip {
       tray.Text = L.AppName;
       RefreshTray();
       tray.Visible = true;
+      // Exe tasindiysa (or. OneDrive Masaustu -> Masaustu) baslangic kaydi eski yolda kalmasin
+      if (StartsWithWindows()) SetStartsWithWindows(true);
       if (!hotkey.Register(hotkeyCombo)) WarnHotkeyTaken(hotkeyCombo);
       else osd.ShowMessage(L.AppName, L.T("Hazır  ·  ", "Ready  ·  ") + Settings.Text(hotkeyCombo), CurrentIsHeadphone());
     }
